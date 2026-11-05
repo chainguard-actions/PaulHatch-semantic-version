@@ -1,0 +1,32 @@
+name: Test minor bump from a feat commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Create base tag and a feat commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git tag -a tminorv1.2.3 -m "base" HEAD
+          git commit --allow-empty -m "fix: a bug fix"
+          git commit --allow-empty -m "feat(core): a new feature"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: tminorv
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VERSION_TYPE: ${{ steps.action.outputs.version_type }}
+          VERSION_TAG: ${{ steps.action.outputs.version_tag }}
+        run: |
+          echo "version=$VERSION type=$VERSION_TYPE tag=$VERSION_TAG"
+          [ "$VERSION" = "1.3.0" ] || { echo "FAIL: version expected 1.3.0"; exit 1; }
+          [ "$VERSION_TYPE" = "minor" ] || { echo "FAIL: version_type expected minor"; exit 1; }
+          [ "$VERSION_TAG" = "tminorv1.3.0" ] || { echo "FAIL: version_tag expected tminorv1.3.0"; exit 1; }
+          echo "PASS"

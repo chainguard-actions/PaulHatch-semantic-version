@@ -1,0 +1,33 @@
+name: Test debug output and json authors
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Create base tag and a commit
+        run: |
+          git config user.email "acttest-author@example.com"
+          git config user.name "Acttest Author"
+          git tag -a tdbgv1.0.0 -m "base" HEAD
+          git commit --allow-empty -m "fix: debug me"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: tdbgv
+          debug: "true"
+          user_format_type: json
+      - name: Assert outputs
+        env:
+          DEBUG_OUTPUT: ${{ steps.action.outputs.debug_output }}
+          AUTHORS: ${{ steps.action.outputs.authors }}
+        run: |
+          echo "authors=$AUTHORS"
+          echo "debug_output length=${#DEBUG_OUTPUT}"
+          [ -n "$DEBUG_OUTPUT" ] || { echo "FAIL: debug_output empty"; exit 1; }
+          echo "$AUTHORS" | grep -q "Acttest Author" || { echo "FAIL: authors missing commit author"; exit 1; }
+          echo "$AUTHORS" | jq -e 'type == "array"' >/dev/null || { echo "FAIL: authors is not a JSON array"; exit 1; }
+          echo "PASS"

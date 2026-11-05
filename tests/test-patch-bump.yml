@@ -1,0 +1,45 @@
+name: Test patch bump from a fix commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Create base tag and a fix commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git tag -a tpatchv1.2.3 -m "base" HEAD
+          git commit --allow-empty -m "fix: a bug fix"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: tpatchv
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VERSION_TYPE: ${{ steps.action.outputs.version_type }}
+          VERSION_TAG: ${{ steps.action.outputs.version_tag }}
+          MAJOR: ${{ steps.action.outputs.major }}
+          MINOR: ${{ steps.action.outputs.minor }}
+          PATCH: ${{ steps.action.outputs.patch }}
+          PREV: ${{ steps.action.outputs.previous_version }}
+          IS_TAGGED: ${{ steps.action.outputs.is_tagged }}
+          CHANGED: ${{ steps.action.outputs.changed }}
+          CURRENT: ${{ steps.action.outputs.current_commit }}
+        run: |
+          echo "version=$VERSION type=$VERSION_TYPE tag=$VERSION_TAG major=$MAJOR minor=$MINOR patch=$PATCH prev=$PREV is_tagged=$IS_TAGGED changed=$CHANGED current=$CURRENT"
+          fail=0
+          [ "$VERSION" = "1.2.4" ] || { echo "FAIL: version expected 1.2.4"; fail=1; }
+          [ "$VERSION_TYPE" = "patch" ] || { echo "FAIL: version_type expected patch"; fail=1; }
+          [ "$VERSION_TAG" = "tpatchv1.2.4" ] || { echo "FAIL: version_tag expected tpatchv1.2.4"; fail=1; }
+          [ "$MAJOR" = "1" ] && [ "$MINOR" = "2" ] && [ "$PATCH" = "4" ] || { echo "FAIL: major/minor/patch mismatch"; fail=1; }
+          [ "$PREV" = "1.2.3" ] || { echo "FAIL: previous_version expected 1.2.3"; fail=1; }
+          [ "$IS_TAGGED" = "false" ] || { echo "FAIL: is_tagged expected false"; fail=1; }
+          [ "$CHANGED" = "true" ] || { echo "FAIL: changed expected true"; fail=1; }
+          [ "$CURRENT" = "$(git rev-parse HEAD)" ] || { echo "FAIL: current_commit mismatch"; fail=1; }
+          [ $fail -eq 0 ] || exit 1
+          echo "PASS"

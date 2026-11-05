@@ -1,0 +1,57 @@
+{
+  "name": "@semanticversion/cli",
+  "description": "Automated semantic versioning based on git history - CLI tool and GitHub Action",
+  "main": "lib/main.js",
+  "bin": {
+    "sv": "lib/cli.js",
+    "semver": "lib/cli.js"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "build": "tsc",
+    "format": "prettier --write .",
+    "format-check": "prettier --check .",
+    "package": "ncc build --source-map --license licenses.txt",
+    "test": "jest --runInBand --config ./jest.config.js",
+    "all": "npm run build && npm run format-check && npm run package && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulhatch/semantic-version.git"
+  },
+  "keywords": [
+    "semantic-version",
+    "semver",
+    "git",
+    "versioning",
+    "cli",
+    "github-actions"
+  ],
+  "author": "Paul Hatcherian",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/paulhatch/semantic-version/issues"
+  },
+  "homepage": "https://github.com/paulhatch/semantic-version#readme",
+  "dependencies": {
+    "@actions/core": "^2.0.2",
+    "@actions/exec": "^2.0.0",
+    "commander": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "@vercel/ncc": "^0.38.4",
+    "jest": "^30.2.0",
+    "js-yaml": "^4.1.1",
+    "prettier": "^3.8.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,38 @@
+name: Test change_path detects changes in a path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Create base tag and change a file under a path
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git tag -a tchgv1.0.0 -m "base" HEAD
+          mkdir -p changed-dir-acttest
+          echo "hello" > changed-dir-acttest/file.txt
+          git add changed-dir-acttest/file.txt
+          git commit -m "fix: change in path"
+      - id: changed
+        uses: .
+        with:
+          tag_prefix: tchgv
+          change_path: changed-dir-acttest
+      - id: unchanged
+        uses: .
+        with:
+          tag_prefix: tchgv
+          change_path: nonexistent-dir-acttest
+      - name: Assert outputs
+        env:
+          CHANGED: ${{ steps.changed.outputs.changed }}
+          UNCHANGED: ${{ steps.unchanged.outputs.changed }}
+        run: |
+          echo "changed(path with change)=$CHANGED changed(other path)=$UNCHANGED"
+          [ "$CHANGED" = "true" ] || { echo "FAIL: expected changed=true"; exit 1; }
+          [ "$UNCHANGED" = "false" ] || { echo "FAIL: expected changed=false"; exit 1; }
+          echo "PASS"

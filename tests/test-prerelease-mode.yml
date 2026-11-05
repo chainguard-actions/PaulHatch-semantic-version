@@ -1,0 +1,30 @@
+name: Test enable_prerelease_mode keeps major at 0
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Create base tag and a breaking commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git tag -a tprev0.1.0 -m "base" HEAD
+          git commit --allow-empty -m "feat!: breaking change"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: tprev
+          enable_prerelease_mode: "true"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VERSION_TYPE: ${{ steps.action.outputs.version_type }}
+        run: |
+          echo "version=$VERSION type=$VERSION_TYPE"
+          [ "$VERSION" = "0.2.0" ] || { echo "FAIL: version expected 0.2.0"; exit 1; }
+          [ "$VERSION_TYPE" = "major" ] || { echo "FAIL: version_type expected major (unchanged)"; exit 1; }
+          echo "PASS"
