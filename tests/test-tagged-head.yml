@@ -1,0 +1,44 @@
+name: Test current commit already tagged
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Tag HEAD
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-tagged-v1.0.0 acttest-tagged-v1.1.0 2>/dev/null || true
+          git tag acttest-tagged-v1.0.0
+          git commit --allow-empty -m "feat: new feature"
+          git tag acttest-tagged-v1.1.0
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-tagged-v
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VTYPE: ${{ steps.action.outputs.version_type }}
+          IS_TAGGED: ${{ steps.action.outputs.is_tagged }}
+          VTAG: ${{ steps.action.outputs.version_tag }}
+        run: |
+          echo "version=$VERSION type=$VTYPE tagged=$IS_TAGGED tag=$VTAG"
+          fail=0
+          [ "$VERSION" = "1.1.0" ] || { echo "FAIL: version expected 1.1.0"; fail=1; }
+          [ "$VTYPE" = "none" ] || { echo "FAIL: version_type expected none"; fail=1; }
+          [ "$IS_TAGGED" = "true" ] || { echo "FAIL: is_tagged expected true"; fail=1; }
+          [ "$VTAG" = "acttest-tagged-v1.1.0" ] || { echo "FAIL: version_tag expected acttest-tagged-v1.1.0"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-tagged-v1.0.0 acttest-tagged-v1.1.0 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --soft "$ORIG_SHA"; fi

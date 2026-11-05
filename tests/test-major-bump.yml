@@ -1,0 +1,42 @@
+name: Test major bump from breaking commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up tag and breaking commit
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-major-v1.2.3 2>/dev/null || true
+          git tag acttest-major-v1.2.3
+          git commit --allow-empty -m "feat: a feature"
+          git commit --allow-empty -m "feat!: drop legacy API"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-major-v
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VTYPE: ${{ steps.action.outputs.version_type }}
+          VTAG: ${{ steps.action.outputs.version_tag }}
+        run: |
+          echo "version=$VERSION type=$VTYPE tag=$VTAG"
+          fail=0
+          [ "$VERSION" = "2.0.0" ] || { echo "FAIL: version expected 2.0.0"; fail=1; }
+          [ "$VTYPE" = "major" ] || { echo "FAIL: version_type expected major"; fail=1; }
+          [ "$VTAG" = "acttest-major-v2.0.0" ] || { echo "FAIL: version_tag expected acttest-major-v2.0.0"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-major-v1.2.3 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --soft "$ORIG_SHA"; fi

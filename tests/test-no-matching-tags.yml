@@ -1,0 +1,31 @@
+name: Test no matching version tags
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Git safe directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-nonexistent-prefix-v
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VTAG: ${{ steps.action.outputs.version_tag }}
+          IS_TAGGED: ${{ steps.action.outputs.is_tagged }}
+          CURRENT: ${{ steps.action.outputs.current_commit }}
+        run: |
+          echo "version=$VERSION tag=$VTAG tagged=$IS_TAGGED current=$CURRENT"
+          fail=0
+          echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "FAIL: version not semver"; fail=1; }
+          [ "$VTAG" = "acttest-nonexistent-prefix-v$VERSION" ] || { echo "FAIL: version_tag mismatch"; fail=1; }
+          [ "$IS_TAGGED" = "false" ] || { echo "FAIL: is_tagged expected false"; fail=1; }
+          [ "$CURRENT" = "$(git rev-parse HEAD)" ] || { echo "FAIL: current_commit should be HEAD"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"

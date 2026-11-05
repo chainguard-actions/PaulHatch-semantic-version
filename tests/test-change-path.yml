@@ -1,0 +1,46 @@
+name: Test change_path detects changes in watched path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up tag and commit touching watched path
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-change-v2.0.0 2>/dev/null || true
+          git tag acttest-change-v2.0.0
+          mkdir -p acttest-change-dir
+          echo "change $(date +%s)" > acttest-change-dir/file.txt
+          git add acttest-change-dir/file.txt
+          git commit -m "fix: change in watched dir"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-change-v
+          change_path: "acttest-change-dir"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          CHANGED: ${{ steps.action.outputs.changed }}
+          VTYPE: ${{ steps.action.outputs.version_type }}
+        run: |
+          echo "version=$VERSION changed=$CHANGED type=$VTYPE"
+          fail=0
+          [ "$CHANGED" = "true" ] || { echo "FAIL: changed expected true"; fail=1; }
+          [ "$VERSION" = "2.0.1" ] || { echo "FAIL: version expected 2.0.1"; fail=1; }
+          [ "$VTYPE" = "patch" ] || { echo "FAIL: version_type expected patch"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-change-v2.0.0 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --hard "$ORIG_SHA"; fi
+          rm -rf acttest-change-dir

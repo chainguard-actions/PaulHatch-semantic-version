@@ -1,0 +1,42 @@
+name: Test custom version_format with increment
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up tag and commits
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-fmt-v3.4.5 2>/dev/null || true
+          git tag acttest-fmt-v3.4.5
+          git commit --allow-empty -m "chore: one"
+          git commit --allow-empty -m "chore: two"
+          git commit --allow-empty -m "chore: three"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-fmt-v
+          version_format: "${major}.${minor}.${patch}-prerelease${increment}"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          INCREMENT: ${{ steps.action.outputs.increment }}
+        run: |
+          echo "version=$VERSION increment=$INCREMENT"
+          if [ "$VERSION" != "3.4.6-prerelease2" ]; then
+            echo "FAIL: expected 3.4.6-prerelease2"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-fmt-v3.4.5 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --soft "$ORIG_SHA"; fi

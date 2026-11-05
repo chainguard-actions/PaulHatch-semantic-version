@@ -1,0 +1,57 @@
+name: Test minor bump from feat commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up tag and feat commit
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-minor-v1.2.3 2>/dev/null || true
+          git tag acttest-minor-v1.2.3
+          git commit --allow-empty -m "feat: add a new feature"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-minor-v
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          MAJOR: ${{ steps.action.outputs.major }}
+          MINOR: ${{ steps.action.outputs.minor }}
+          PATCH: ${{ steps.action.outputs.patch }}
+          VTYPE: ${{ steps.action.outputs.version_type }}
+          VTAG: ${{ steps.action.outputs.version_tag }}
+          CHANGED: ${{ steps.action.outputs.changed }}
+          IS_TAGGED: ${{ steps.action.outputs.is_tagged }}
+          PREV: ${{ steps.action.outputs.previous_version }}
+          AUTHORS: ${{ steps.action.outputs.authors }}
+          CURRENT: ${{ steps.action.outputs.current_commit }}
+        run: |
+          echo "version=$VERSION major=$MAJOR minor=$MINOR patch=$PATCH type=$VTYPE tag=$VTAG changed=$CHANGED tagged=$IS_TAGGED prev=$PREV authors=$AUTHORS current=$CURRENT"
+          fail=0
+          [ "$VERSION" = "1.3.0" ] || { echo "FAIL: version expected 1.3.0"; fail=1; }
+          [ "$MAJOR" = "1" ] || { echo "FAIL: major expected 1"; fail=1; }
+          [ "$MINOR" = "3" ] || { echo "FAIL: minor expected 3"; fail=1; }
+          [ "$PATCH" = "0" ] || { echo "FAIL: patch expected 0"; fail=1; }
+          [ "$VTYPE" = "minor" ] || { echo "FAIL: version_type expected minor"; fail=1; }
+          [ "$VTAG" = "acttest-minor-v1.3.0" ] || { echo "FAIL: version_tag expected acttest-minor-v1.3.0"; fail=1; }
+          [ "$CHANGED" = "true" ] || { echo "FAIL: changed expected true"; fail=1; }
+          [ "$IS_TAGGED" = "false" ] || { echo "FAIL: is_tagged expected false"; fail=1; }
+          echo "$PREV" | grep -q "1.2.3" || { echo "FAIL: previous_version should contain 1.2.3"; fail=1; }
+          echo "$AUTHORS" | grep -q "Test User" || { echo "FAIL: authors should contain Test User"; fail=1; }
+          [ "$CURRENT" = "$(git rev-parse HEAD)" ] || { echo "FAIL: current_commit should be HEAD"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-minor-v1.2.3 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --soft "$ORIG_SHA"; fi

@@ -1,0 +1,40 @@
+name: Test search_commit_body detects minor in body
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up tag and commit with feat in body
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git tag -d acttest-body-v1.0.0 2>/dev/null || true
+          git tag acttest-body-v1.0.0
+          git commit --allow-empty -m "chore: squash merge" -m "feat: hidden feature in body"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-body-v
+          search_commit_body: "true"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          VTYPE: ${{ steps.action.outputs.version_type }}
+        run: |
+          echo "version=$VERSION type=$VTYPE"
+          fail=0
+          [ "$VERSION" = "1.1.0" ] || { echo "FAIL: version expected 1.1.0"; fail=1; }
+          [ "$VTYPE" = "minor" ] || { echo "FAIL: version_type expected minor"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          git tag -d acttest-body-v1.0.0 2>/dev/null || true
+          if [ -n "$ORIG_SHA" ]; then git reset --soft "$ORIG_SHA"; fi
