@@ -1,0 +1,62 @@
+name: Test patch bump from plain commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up git history
+        run: |
+          set -e
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_REF=$(git rev-parse --abbrev-ref HEAD)" >> "$GITHUB_ENV"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git checkout -B acttest-branch
+          git commit --allow-empty -m "chore: base"
+          git tag acttest-v1.2.3
+          git commit --allow-empty -m "fix: a bug"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-v
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          MAJOR: ${{ steps.action.outputs.major }}
+          MINOR: ${{ steps.action.outputs.minor }}
+          PATCH: ${{ steps.action.outputs.patch }}
+          TYPE: ${{ steps.action.outputs.version_type }}
+          INCREMENT: ${{ steps.action.outputs.increment }}
+          TAGGED: ${{ steps.action.outputs.is_tagged }}
+          CHANGED: ${{ steps.action.outputs.changed }}
+          VTAG: ${{ steps.action.outputs.version_tag }}
+          PREV: ${{ steps.action.outputs.previous_version }}
+          CURRENT: ${{ steps.action.outputs.current_commit }}
+        run: |
+          echo "version=$VERSION major=$MAJOR minor=$MINOR patch=$PATCH type=$TYPE increment=$INCREMENT"
+          echo "is_tagged=$TAGGED changed=$CHANGED version_tag=$VTAG previous=$PREV current=$CURRENT"
+          fail=0
+          [ "$VERSION" = "1.2.4" ] || { echo "FAIL: version expected 1.2.4"; fail=1; }
+          [ "$MAJOR" = "1" ] || { echo "FAIL: major"; fail=1; }
+          [ "$MINOR" = "2" ] || { echo "FAIL: minor"; fail=1; }
+          [ "$PATCH" = "4" ] || { echo "FAIL: patch"; fail=1; }
+          [ "$TYPE" = "patch" ] || { echo "FAIL: version_type expected patch"; fail=1; }
+          [ "$INCREMENT" = "0" ] || { echo "FAIL: increment expected 0"; fail=1; }
+          [ "$TAGGED" = "false" ] || { echo "FAIL: is_tagged expected false"; fail=1; }
+          [ "$CHANGED" = "true" ] || { echo "FAIL: changed expected true"; fail=1; }
+          case "$VTAG" in *1.2.4*) ;; *) echo "FAIL: version_tag should contain 1.2.4"; fail=1 ;; esac
+          case "$PREV" in *1.2.3*) ;; *) echo "FAIL: previous_version should contain 1.2.3"; fail=1 ;; esac
+          [ "$CURRENT" = "$(git rev-parse HEAD)" ] || { echo "FAIL: current_commit mismatch"; fail=1; }
+          [ "$fail" = "0" ] || exit 1
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -n "$ORIG_REF" ] && [ "$ORIG_REF" != "HEAD" ]; then git checkout -f "$ORIG_REF"; elif [ -n "$ORIG_SHA" ]; then git checkout -f "$ORIG_SHA"; fi
+          git branch -D acttest-branch || true
+          git tag -l 'acttest-*' | xargs -r git tag -d || true

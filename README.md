@@ -1,1 +1,0 @@
-# PaulHatch-semantic-version

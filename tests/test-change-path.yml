@@ -1,0 +1,53 @@
+name: Test change_path detection
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up git history
+        run: |
+          set -e
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_REF=$(git rev-parse --abbrev-ref HEAD)" >> "$GITHUB_ENV"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git checkout -B acttest-branch
+          git commit --allow-empty -m "chore: base"
+          git tag acttest-v1.0.0
+          mkdir -p acttest-changed
+          echo "hello" > acttest-changed/file.txt
+          git add acttest-changed/file.txt
+          git commit -m "fix: change in acttest-changed"
+      - id: changed
+        uses: .
+        with:
+          tag_prefix: acttest-v
+          change_path: acttest-changed
+      - id: unchanged
+        uses: .
+        with:
+          tag_prefix: acttest-v
+          change_path: acttest-untouched-dir
+      - name: Assert outputs
+        env:
+          CHANGED: ${{ steps.changed.outputs.changed }}
+          VERSION: ${{ steps.changed.outputs.version }}
+          UNCHANGED: ${{ steps.unchanged.outputs.changed }}
+        run: |
+          echo "changed=$CHANGED version=$VERSION unchanged=$UNCHANGED"
+          if [ "$CHANGED" != "true" ]; then echo "FAIL: expected changed=true for modified path"; exit 1; fi
+          if [ "$UNCHANGED" != "false" ]; then echo "FAIL: expected changed=false for untouched path"; exit 1; fi
+          if [ "$VERSION" != "1.0.1" ]; then echo "FAIL: expected version 1.0.1"; exit 1; fi
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -n "$ORIG_REF" ] && [ "$ORIG_REF" != "HEAD" ]; then git checkout -f "$ORIG_REF"; elif [ -n "$ORIG_SHA" ]; then git checkout -f "$ORIG_SHA"; fi
+          git branch -D acttest-branch || true
+          git tag -l 'acttest-*' | xargs -r git tag -d || true
+          rm -rf acttest-changed

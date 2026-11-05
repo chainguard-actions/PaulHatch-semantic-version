@@ -1,0 +1,46 @@
+name: Test bump_each_commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up git history
+        run: |
+          set -e
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          echo "ORIG_REF=$(git rev-parse --abbrev-ref HEAD)" >> "$GITHUB_ENV"
+          echo "ORIG_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git checkout -B acttest-branch
+          git commit --allow-empty -m "chore: base"
+          git tag acttest-v1.2.3
+          git commit --allow-empty -m "fix: one"
+          git commit --allow-empty -m "fix: two"
+          git commit --allow-empty -m "fix: three"
+      - id: action
+        uses: .
+        with:
+          tag_prefix: acttest-v
+          bump_each_commit: "true"
+      - name: Assert outputs
+        env:
+          VERSION: ${{ steps.action.outputs.version }}
+          TYPE: ${{ steps.action.outputs.version_type }}
+          INCREMENT: ${{ steps.action.outputs.increment }}
+        run: |
+          echo "version=$VERSION type=$TYPE increment=$INCREMENT"
+          if [ "$VERSION" != "1.2.6" ]; then echo "FAIL: expected 1.2.6"; exit 1; fi
+          if [ "$TYPE" != "patch" ]; then echo "FAIL: expected patch"; exit 1; fi
+          if [ "$INCREMENT" != "0" ]; then echo "FAIL: expected increment 0"; exit 1; fi
+          echo "PASS"
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -n "$ORIG_REF" ] && [ "$ORIG_REF" != "HEAD" ]; then git checkout -f "$ORIG_REF"; elif [ -n "$ORIG_SHA" ]; then git checkout -f "$ORIG_SHA"; fi
+          git branch -D acttest-branch || true
+          git tag -l 'acttest-*' | xargs -r git tag -d || true
